@@ -1,0 +1,367 @@
+<!doctype html>
+<!--
+  Copyright F5, Inc. 2026
+  Licensed under the MIT License. See LICENSE.
+-->
+<html>
+  <head>
+    <script src="config.js"></script>
+    <meta charset="utf-8" />
+    <title>People Assistant</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      :root{
+        --bg:#0b1020; --card:#121931; --muted:#a0a7c0; --accent:#5dd0ff; --accent2:#a27bff;
+        --border:#28314f; --user:#1e2a4a; --assistant:#16233f; --success:#1f9d55; --danger:#dc3545; --inputBarH: 120px;
+      }
+      *{box-sizing:border-box}
+      body{
+        margin:0; background:linear-gradient(180deg,#0a0f1f, #0f1430);
+        color:#e9ecf7; font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      }
+      header{
+        position:sticky; top:0; z-index:10; backdrop-filter:saturate(140%) blur(6px);
+        background:rgba(12,18,40,.75); border-bottom:1px solid var(--border);
+      }
+      .container{max-width:980px; margin:0 auto; padding:16px}
+      .brand{display:flex; align-items:center; gap:10px}
+      .dot{width:10px;height:10px;border-radius:50%;background:linear-gradient(45deg,var(--accent),var(--accent2));box-shadow:0 0 12px var(--accent)}
+      .subtitle{color:var(--muted); font-size:14px}
+      .controls{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px }
+      select,button,.pill{
+        background:#0e1530; border:1px solid var(--border); color:#e9ecf7; border-radius:10px;
+        padding:8px 10px; font-size:14px
+      }
+      button{ cursor:pointer }
+      button.primary{
+        background:linear-gradient(90deg,var(--accent),var(--accent2)); border:none; color:#051025; font-weight:600
+      }
+      button.ghost{ background:#0e1530 }
+      .pill{ display:inline-flex; align-items:center; gap:6px; }
+      main{ padding:16px 0 calc(var(--inputBarH) + 24px) }
+      .chat{
+        display:flex; flex-direction:column; gap:14px;
+        padding-bottom: calc(var(--inputBarH) + 24px);
+      }
+      .chat::after{ content:""; display:block; height:calc(var(--inputBarH) + 12px) }
+      .msg{ display:flex; gap:10px; align-items:flex-start; }
+      .msg { width: 100%; }
+      .msg.user { justify-content: flex-start; }
+      .msg.assistant { justify-content: flex-end; }
+      .bubble{
+        background:var(--assistant); border:1px solid var(--border); border-radius:16px;
+        padding:12px 14px; max-width:70%; box-shadow:0 8px 30px rgba(0,0,0,.15)
+      }
+      .msg.user .bubble{ background:var(--user) }
+      .role{ font-weight:700; font-size:12px; letter-spacing:.02em; color:var(--muted) }
+      .meta{ display:flex; gap:10px; align-items:center; color:var(--muted); font-size:12px; margin-top:6px }
+      .inputBar{
+        position:fixed; bottom:0; left:0; right:0; background:rgba(12,18,40,.9);
+        border-top:1px solid var(--border); backdrop-filter:saturate(140%) blur(8px)
+      }
+      .composer{
+        max-width:980px; margin:0 auto; padding:10px 16px; display:grid; grid-template-columns:1fr auto; gap:10px
+      }
+      textarea{
+        width:100%; min-height:56px; max-height:200px; resize:vertical; background:#0e1530; color:#e9ecf7;
+        border:1px solid var(--border); border-radius:12px; padding:12px 14px; font:16px/1.4 inherit
+      }
+      .btnRow{ display:flex; gap:8px; flex-wrap:wrap; align-items:center }
+      .spinner{ width:16px; height:16px; border:3px solid #3b4570; border-top-color:#87e0ff; border-radius:50%; animation:spin 1s linear infinite }
+      @keyframes spin{ to{ transform:rotate(360deg) } }
+      .badge{ padding:2px 8px; border-radius:999px; font-size:12px; background:#0f1a38; border:1px solid var(--border); color:#b9c1dd }
+      .muted{ color:var(--muted) }
+      .actions{ display:flex; gap:8px; margin-top:8px }
+      .link{ color:#9ad7ff; text-decoration:underline; cursor:pointer }
+      .toast{ position:fixed; right:16px; bottom:90px; background:#182447; border:1px solid var(--border); color:#e9ecf7; padding:10px 12px; border-radius:10px; display:none }
+      .right{ margin-left:auto }
+      .badge.status{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px }
+      .status-dot{ width:8px; height:8px; border-radius:50%; background:#8b93b5 }
+      .status-idle{ border-color:#2a3a55; color:#b9c1dd }
+      .status-idle .status-dot{ background:#3b8766; }
+      .status-busy{ border-color: var(--accent); color:#d5efff; background:#0f1a38 }
+      .status-busy .status-dot{
+        background: var(--accent);
+        box-shadow: 0 0 0 0 rgba(93,208,255,0.7);
+        animation: pulse 1.4s ease-out infinite;
+      }
+      @keyframes pulse{
+        0%{ box-shadow: 0 0 0 0 rgba(93,208,255,0.7); }
+        70%{ box-shadow: 0 0 0 10px rgba(93,208,255,0); }
+        100%{ box-shadow: 0 0 0 0 rgba(93,208,255,0); }
+      }
+      /* Simple panel for API token + curl */
+      #apiPanel{
+        position:fixed; right:16px; top:76px; z-index:15;
+        background:#0f1a38; border:1px solid var(--border); border-radius:10px; padding:10px 12px; display:none; max-width:520px;
+      }
+      #apiPanel pre{
+        margin:8px 0 0; padding:10px; background:#0b1026; border:1px solid var(--border); border-radius:8px;
+        white-space:pre-wrap; word-break:break-all; font-size:12px; line-height:1.4;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="container">
+        <div class="brand">
+          <div class="dot"></div>
+          <div>
+            <div style="font-weight:700">People Assistant</div>
+            <div class="subtitle">ChromaDB + CalypsoAI • Focused on the People collection</div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <label class="pill">
+            Results
+            <select id="k">
+              <option value="3">3</option>
+              <option value="5" selected>5</option>
+              <option value="10">10</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+
+          <span class="badge status status-idle" id="status" aria-live="polite">
+            <span class="status-dot"></span> Idle
+          </span>
+
+          <div class="right">
+            <button id="clear" class="ghost">Clear chat</button>
+            <button id="apiToken" class="ghost">Get API Token</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <div id="chat" class="chat">
+        <div class="msg">
+          <div class="bubble">
+            <div class="role">Assistant</div>
+            <div>Ask me about the people collection—or anything (math, trivia, etc.). Use the bar below to choose how many results to retrieve.</div>
+            <div class="meta"><span class="muted">Tip: Shift+Enter for newline</span></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div class="inputBar">
+      <div class="composer">
+        <textarea id="input" placeholder="Type your question…"></textarea>
+        <div class="btnRow">
+          <button id="send" class="primary">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="apiPanel">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="font-weight:600;">API token generated</div>
+        <span class="link" id="copyToken">Copy token</span>
+        <span class="link" id="closePanel" style="margin-left:auto">Close</span>
+      </div>
+      <div id="apiTokenText" class="muted" style="margin-top:4px;"></div>
+      <div style="margin-top:8px;font-weight:600;">Try with curl:</div>
+      <pre id="curlBox"></pre>
+      <div><span class="link" id="copyCurl">Copy curl</span></div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+      // Backend URL provided at deploy time
+      const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.apiBase) || "http://localhost:8000";
+      // Redirect to login if no token (and STOP executing)
+      if (!localStorage.getItem('people_token')) {
+        window.location.href = '/login.html';
+        throw new Error('Redirecting to login');
+      }
+
+      // ---- Elements ----
+      const chatEl = document.getElementById('chat');
+      const inputEl = document.getElementById('input');
+      const sendBtn = document.getElementById('send');
+      const kSel = document.getElementById('k');
+      const status = document.getElementById('status');
+      const clearBtn = document.getElementById('clear');
+      const toast = document.getElementById('toast');
+      const apiBtn = document.getElementById('apiToken');
+      const apiPanel = document.getElementById('apiPanel');
+      const apiTokenText = document.getElementById('apiTokenText');
+      const curlBox = document.getElementById('curlBox');
+      const copyTokenBtn = document.getElementById('copyToken');
+      const copyCurlBtn = document.getElementById('copyCurl');
+      const closePanel = document.getElementById('closePanel');
+
+      // ---- Layout: avoid overlap with fixed input bar ----
+      const inputBarEl = document.querySelector('.inputBar');
+      function updateInputBarHeight(){
+        const h = inputBarEl?.offsetHeight || 120;
+        document.documentElement.style.setProperty('--inputBarH', h + 'px');
+      }
+      window.addEventListener('load', updateInputBarHeight);
+      window.addEventListener('resize', updateInputBarHeight);
+      const ta = document.getElementById('input');
+      ['input','change'].forEach(evt => ta.addEventListener(evt, updateInputBarHeight));
+
+      // ---- Settings persistence ----
+      const saved = JSON.parse(localStorage.getItem('rag-ui-settings') || '{}');
+      if (saved.k) kSel.value = saved.k;
+      function persistSettings() {
+        localStorage.setItem('rag-ui-settings', JSON.stringify({ k: kSel.value }));
+      }
+      kSel.addEventListener('change', persistSettings);
+
+      // ---- Chat helpers ----
+      function escapeHtml(s){
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      }
+      function addUserMessage(text){
+        const div = document.createElement('div');
+        div.className = 'msg user';
+        div.innerHTML = `<div class="bubble"><div class="role">You</div><div>${escapeHtml(text).replace(/\n/g,'<br>')}</div></div>`;
+        chatEl.appendChild(div);
+        chatEl.scrollTop = chatEl.scrollHeight;
+      }
+      function addAssistantMessage({message, ms}){
+        const div = document.createElement('div');
+        div.className = 'msg assistant';
+        div.innerHTML = `
+          <div class="bubble">
+            <div class="role">Assistant</div>
+            <div>${escapeHtml(message).replace(/\n/g,'<br>')}</div>
+            <div class="meta">
+              <span class="muted">Latency: ${ms} ms</span>
+            </div>
+            <div class="actions">
+              <span class="link" data-copy="${escapeHtml(message)}">Copy answer</span>
+            </div>
+          </div>`;
+        chatEl.appendChild(div);
+        chatEl.scrollTop = chatEl.scrollHeight;
+        div.querySelectorAll('[data-copy]').forEach(el=>{
+          el.addEventListener('click', ()=>{
+            navigator.clipboard.writeText(el.getAttribute('data-copy'));
+            showToast('Copied to clipboard');
+          });
+        });
+      }
+      function showToast(text){
+        toast.textContent = text;
+        toast.style.display = 'block';
+        setTimeout(()=>toast.style.display='none', 1500);
+      }
+
+      // ---- Status ----
+      let working = false;
+      function setStatusBusy(){
+        working = true;
+        status.className = 'badge status status-busy';
+        status.innerHTML = `<span class="status-dot"></span> Working…`;
+      }
+      function setStatusIdle(){
+        working = false;
+        status.className = 'badge status status-idle';
+        status.innerHTML = `<span class="status-dot"></span> Idle`;
+      }
+
+      // ---- Send flow ----
+      async function send(){
+        const question = inputEl.value.trim();
+        if (!question || working) return;
+        addUserMessage(question);
+        inputEl.value = '';
+        setStatusBusy();
+        const started = performance.now();
+
+        try{
+          const body = {
+            question,
+            top_k: kSel.value === 'all' ? 'all' : Number(kSel.value)
+          };
+
+          // Read token at send-time
+          const token = localStorage.getItem('people_token');
+          if (!token) {
+            window.location.href = '/login.html';
+            return;
+          }
+
+          const resp = await fetch(`${API_BASE}/ask`, {
+            method:'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(body)
+          });
+
+          const data = await resp.json();
+          const ms = Math.round(performance.now()-started);
+
+          // If backend says unauth, bounce to login
+          if (resp.status === 401 || resp.status === 403) {
+            window.location.href = '/login.html';
+            return;
+          }
+
+          if(!resp.ok) throw new Error(data?.detail || data?.error || 'Request failed');
+          addAssistantMessage({message:data.message, ms});
+        }catch(e){
+          const ms = Math.round(performance.now()-started);
+          addAssistantMessage({message:`Error: ${e.message}`, ms});
+        }finally{
+          setStatusIdle();
+        }
+      }
+
+      sendBtn.addEventListener('click', send);
+      inputEl.addEventListener('keydown', (e)=>{
+        if (e.key === 'Enter' && !e.shiftKey){
+          e.preventDefault(); send();
+        }
+      });
+      clearBtn.addEventListener('click', ()=>{
+        chatEl.innerHTML = '';
+        showToast('Chat cleared');
+      });
+
+      // ---- API Token generation (non-expiring) ---
+      apiBtn.addEventListener('click', async ()=>{
+        try{
+          const sessionToken = localStorage.getItem('people_token');
+          if (!sessionToken) { window.location.href='/login.html'; return; }
+
+          // For demo, we call /token with demo creds and no_exp:true.
+          const res = await fetch(`${API_BASE}/token`, {
+            method:'POST',
+            headers:{
+              'Content-Type':'application/json',
+              'Authorization': `Bearer ${sessionToken}`
+            },
+            body: JSON.stringify({ username:'admin', password:'root', no_exp:true })
+          });
+          const data = await res.json();
+          if(!res.ok) throw new Error(data?.detail || data?.error || 'Failed to get API token');
+
+          const apiToken = data.access_token;
+          localStorage.setItem('people_api_token', apiToken);
+
+          const curl = `curl -X POST ${API_BASE}/ask \\\n  -H "Authorization: Bearer ${apiToken}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"question":"Who are the people in the company?","top_k":"all"}'`;
+
+          apiPanel.style.display = 'block';
+          apiTokenText.textContent = apiToken;
+          curlBox.textContent = curl;
+
+          copyTokenBtn.onclick = ()=>{ navigator.clipboard.writeText(apiToken); showToast('Token copied'); };
+          copyCurlBtn.onclick = ()=>{ navigator.clipboard.writeText(curl); showToast('cURL copied'); };
+          closePanel.onclick = ()=>{ apiPanel.style.display = 'none'; };
+        }catch(e){
+          showToast(`Error: ${e.message}`);
+        }
+      });
+    </script>
+  </body>
+</html>
